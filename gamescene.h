@@ -12,13 +12,14 @@ class GameScene : public QGraphicsScene {
     Q_OBJECT
 public:
     GameScene(QObject *parent = nullptr);
-    void startGame();
+    void startGame(const GameSession& session);
     void stopGame();
     
     PlayerFish* player() const { return m_player; }
 
 signals:
     void gameOver();
+    void backToMenuRequested();
 
 protected:
     void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
@@ -33,6 +34,10 @@ private:
     void checkCollisions();
     void updateHUD();
     void showGameOver();
+    void showVictory();
+    void showPauseMenu();
+    void hidePauseMenu();
+    GameSession nextSession() const;
 
     QTimer *m_gameTimer;
     QTimer *m_spawnTimer;
@@ -42,11 +47,15 @@ private:
     // HUD Items
     QGraphicsTextItem *m_hudText;
     QGraphicsWidget *m_gameOverPanel;
+    QGraphicsWidget *m_pausePanel;
+    QGraphicsWidget *m_victoryPanel;
+    GameSession m_session;
     
     int m_score = 0;
     int m_level = 1;
     int m_exp = 0;
     bool m_isGameOver = false;
+    bool m_isPaused = false;
 
     bool m_keyUp = false, m_keyDown = false, m_keyLeft = false, m_keyRight = false;
 };

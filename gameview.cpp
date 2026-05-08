@@ -7,6 +7,7 @@ GameView::GameView(QWidget *parent) : QGraphicsView(parent) {
     
     setRenderHint(QPainter::Antialiasing);
     setMouseTracking(true); // 必须开启鼠标追踪，否则 mouseMoveEvent 只有在按下鼠标时才触发
+    setFocusPolicy(Qt::StrongFocus);
     
     // 设置视口属性
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);

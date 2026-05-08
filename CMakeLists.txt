@@ -27,6 +27,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         gamescene.h gamescene.cpp
         fish.h fish.cpp
         gameconfig.h
+        skinmanager.h skinmanager.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET FishGame APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

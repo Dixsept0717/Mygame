@@ -1,6 +1,9 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 #include "gameconfig.h"
+#include <QButtonGroup>
+#include <QDialogButtonBox>
+#include <QRadioButton>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -90,6 +93,20 @@ QWidget* MainWindow::createSettingsMenu()
     ctrlLayout->addWidget(ctrlCombo);
     layout->addLayout(ctrlLayout);
 
+    // 主题（下一局生效）
+    QHBoxLayout *themeLayout = new QHBoxLayout();
+    themeLayout->addWidget(new QLabel("主题: ", widget));
+    QComboBox *themeCombo = new QComboBox(widget);
+    themeCombo->addItem("常规");
+    themeCombo->addItem("麦当劳");
+    themeCombo->setCurrentIndex(GameConfig::instance().pendingThemeId() == ThemeId::Default ? 0 : 1);
+    themeLayout->addWidget(themeCombo);
+    layout->addLayout(themeLayout);
+
+    QLabel *themeHint = new QLabel("主题修改：下一局生效", widget);
+    themeHint->setStyleSheet("color: #666666; font-size: 12px;");
+    layout->addWidget(themeHint);
+
     QPushButton *backBtn = new QPushButton("返回主菜单", widget);
     backBtn->setStyleSheet("font-size: 18px; padding: 10px;");
     layout->addWidget(backBtn);
@@ -99,6 +116,9 @@ QWidget* MainWindow::createSettingsMenu()
     });
     connect(ctrlCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [](int index){
         GameConfig::instance().setControlMode(index == 0 ? ControlMode::Mouse : ControlMode::Keyboard);
+    });
+    connect(themeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [](int index){
+        GameConfig::instance().setPendingThemeId(index == 0 ? ThemeId::Default : ThemeId::McDonalds);
     });
     connect(backBtn, &QPushButton::clicked, this, &MainWindow::onBackToMenu);
 
@@ -113,14 +133,57 @@ QWidget* MainWindow::createGameContainer()
 
     gameView = new GameView(widget);
     layout->addWidget(gameView);
+    connect(gameView->gameScene(), &GameScene::backToMenuRequested, this, &MainWindow::onBackToMenu);
 
     return widget;
 }
 
 void MainWindow::onStartGame()
 {
+    QDialog dialog(this);
+    dialog.setWindowTitle("选择难度");
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+
+    QLabel *title = new QLabel("请选择游戏难度：", &dialog);
+    title->setStyleSheet("font-size: 16px; font-weight: bold;");
+    layout->addWidget(title);
+
+    QButtonGroup *group = new QButtonGroup(&dialog);
+    QRadioButton *easyBtn = new QRadioButton("简单", &dialog);
+    QRadioButton *normalBtn = new QRadioButton("普通", &dialog);
+    QRadioButton *hardBtn = new QRadioButton("困难", &dialog);
+    normalBtn->setChecked(true);
+
+    group->addButton(easyBtn, (int)Difficulty::Easy);
+    group->addButton(normalBtn, (int)Difficulty::Normal);
+    group->addButton(hardBtn, (int)Difficulty::Hard);
+
+    layout->addWidget(easyBtn);
+    layout->addWidget(normalBtn);
+    layout->addWidget(hardBtn);
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    Difficulty chosen = (Difficulty)group->checkedId();
+    startGameWithDifficulty(chosen);
+}
+
+void MainWindow::startGameWithDifficulty(Difficulty difficulty)
+{
     stackedWidget->setCurrentIndex(2);
-    gameView->gameScene()->startGame();
+
+    GameSession session;
+    session.difficulty = difficulty;
+    session.difficultyConfig = difficultyConfigFor(difficulty);
+    session.activeThemeId = GameConfig::instance().pendingThemeId();
+    session.winLevel = 10;
+
+    gameView->gameScene()->startGame(session);
     gameView->setFocus(); // 确保键盘事件能被捕获
 }
 
@@ -136,5 +199,6 @@ void MainWindow::onExitGame()
 
 void MainWindow::onBackToMenu()
 {
+    gameView->gameScene()->stopGame();
     stackedWidget->setCurrentIndex(0);
 }

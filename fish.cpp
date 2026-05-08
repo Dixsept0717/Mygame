@@ -1,27 +1,53 @@
 #include "fish.h"
-#include "gameconfig.h"
+#include "skinmanager.h"
 #include <QtMath>
 #include <QRandomGenerator>
 
-Fish::Fish(int level, QGraphicsItem *parent)
-    : QGraphicsItem(parent), m_level(level)
+Fish::Fish(int level, FishVisualType visualType, ThemeId themeId, int variant, QGraphicsItem *parent)
+    : QGraphicsItem(parent),
+      m_level(level),
+      m_visualType(visualType),
+      m_themeId(themeId),
+      m_variant(variant)
 {
     m_size = 20.0 + level * 10.0;
-    
-    // 根据等级设置颜色
-    switch(level) {
-        case 1: m_color = Qt::gray; break;
-        case 2: m_color = Qt::yellow; break;
-        case 3: m_color = QColor(255, 165, 0); break; // Orange
-        case 4: m_color = Qt::red; break;
-        case 5: m_color = QColor(128, 0, 128); break; // Purple
-        default: m_color = Qt::blue; break;
-    }
+    updatePixmap();
 }
 
 QRectF Fish::boundingRect() const
 {
-    return QRectF(-m_size/2, -m_size/2, m_size, m_size);
+    if (m_pixmap.isNull()) {
+        return QRectF(-m_size/2, -m_size/2, m_size, m_size);
+    }
+    return QRectF(-m_pixmap.width() / 2.0, -m_pixmap.height() / 2.0, m_pixmap.width(), m_pixmap.height());
+}
+
+void Fish::setLevel(int level)
+{
+    if (m_level == level) return;
+    prepareGeometryChange();
+    m_level = level;
+    m_size = 20.0 + m_level * 10.0;
+    updatePixmap();
+}
+
+void Fish::setThemeId(ThemeId themeId)
+{
+    if (m_themeId == themeId) return;
+    m_themeId = themeId;
+    updatePixmap();
+}
+
+void Fish::setVariant(int variant)
+{
+    if (m_variant == variant) return;
+    m_variant = variant;
+    updatePixmap();
+}
+
+void Fish::updatePixmap()
+{
+    m_pixmap = SkinManager::instance().pixmapFor(m_themeId, m_visualType, m_level, m_variant);
 }
 
 void Fish::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
@@ -30,21 +56,20 @@ void Fish::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWid
     Q_UNUSED(widget);
     
     painter->setRenderHint(QPainter::Antialiasing);
-    painter->setBrush(m_color);
+    if (!m_pixmap.isNull()) {
+        painter->drawPixmap(-m_pixmap.width() / 2, -m_pixmap.height() / 2, m_pixmap);
+        return;
+    }
+    painter->setBrush(Qt::gray);
     painter->setPen(Qt::NoPen);
     painter->drawEllipse(boundingRect());
-    
-    // 画一个眼睛来指示方向
-    painter->setBrush(Qt::white);
-    painter->drawEllipse(m_size/4, -m_size/4, m_size/5, m_size/5);
 }
 
 // PlayerFish Implementation
-PlayerFish::PlayerFish() : Fish(1)
+PlayerFish::PlayerFish(ThemeId themeId) : Fish(1, FishVisualType::Player, themeId, 1)
 {
-    m_color = Qt::green;
     m_speed = 5.0;
-    setZValue(10); // 确保玩家在最上层
+    setZValue(10);
 }
 
 void PlayerFish::updatePosition()
@@ -104,23 +129,25 @@ void PlayerFish::setKeys(bool up, bool down, bool left, bool right)
 
 void PlayerFish::grow(int newLevel)
 {
-    m_level = newLevel;
-    m_size = 20.0 + m_level * 10.0; // 同步基础体型
-    prepareGeometryChange();
+    setLevel(newLevel);
 }
 
 void PlayerFish::reset()
 {
-    m_level = 1;
-    m_size = 30.0;
+    setLevel(1);
     setPos(0, 0);
 }
 
-// EnemyFish Implementation
-EnemyFish::EnemyFish(int level, bool fromLeft, qreal yPos)
-    : Fish(level), m_fromLeft(fromLeft)
+void PlayerFish::setTheme(ThemeId themeId)
 {
-    m_speed = 2.0 + QRandomGenerator::global()->bounded(30) / 10.0; // 随机速度 2.0 - 5.0
+    setThemeId(themeId);
+}
+
+// EnemyFish Implementation
+EnemyFish::EnemyFish(int level, ThemeId themeId, double speedMultiplier, bool fromLeft, qreal yPos, int variant)
+    : Fish(level, FishVisualType::Enemy, themeId, variant), m_fromLeft(fromLeft)
+{
+    m_speed = (2.0 + QRandomGenerator::global()->bounded(30) / 10.0) * speedMultiplier;
     if (!m_fromLeft) m_speed = -m_speed;
     
     setPos(fromLeft ? -100 : 1100, yPos);

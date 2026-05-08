@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QSlider>
 #include <QComboBox>
+#include <QDialog>
 #include "gameview.h"
 
 QT_BEGIN_NAMESPACE
@@ -35,6 +36,7 @@ private:
     QWidget* createMainMenu();
     QWidget* createSettingsMenu();
     QWidget* createGameContainer();
+    void startGameWithDifficulty(Difficulty difficulty);
 
     Ui::MainWindow *ui;
     QStackedWidget *stackedWidget;
