@@ -200,5 +200,6 @@ void MainWindow::onExitGame()
 void MainWindow::onBackToMenu()
 {
     gameView->gameScene()->stopGame();
+    gameView->gameScene()->stopBgm();
     stackedWidget->setCurrentIndex(0);
 }

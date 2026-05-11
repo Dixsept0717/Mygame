@@ -2,6 +2,8 @@
 #include "skinmanager.h"
 #include <QtMath>
 #include <QRandomGenerator>
+#include <QFont>
+#include <QPainterPath>
 
 Fish::Fish(int level, FishVisualType visualType, ThemeId themeId, int variant, QGraphicsItem *parent)
     : QGraphicsItem(parent),
@@ -20,6 +22,17 @@ QRectF Fish::boundingRect() const
         return QRectF(-m_size/2, -m_size/2, m_size, m_size);
     }
     return QRectF(-m_pixmap.width() / 2.0, -m_pixmap.height() / 2.0, m_pixmap.width(), m_pixmap.height());
+}
+
+QPainterPath Fish::shape() const
+{
+    QPainterPath path;
+    const QRectF r = boundingRect();
+    const qreal mx = r.width() * 0.18;
+    const qreal my = r.height() * 0.22;
+    const QRectF hit = r.adjusted(mx, my, -mx, -my);
+    path.addEllipse(hit);
+    return path;
 }
 
 void Fish::setLevel(int level)
@@ -58,6 +71,33 @@ void Fish::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWid
     painter->setRenderHint(QPainter::Antialiasing);
     if (!m_pixmap.isNull()) {
         painter->drawPixmap(-m_pixmap.width() / 2, -m_pixmap.height() / 2, m_pixmap);
+        if (m_visualType == FishVisualType::Enemy) {
+            painter->save();
+            painter->rotate(-rotation());
+
+            const QRectF r = boundingRect();
+            const QString text = QString("Lv%1").arg(m_level);
+
+            int fontPx = qMax(12, (int)(r.height() * 0.22));
+            QFont font("Arial", fontPx, QFont::Bold);
+            painter->setFont(font);
+
+            QPointF pos(r.left() + r.width() * 0.08, r.top() + r.height() * 0.28);
+            QPainterPath path;
+            path.addText(pos, font, text);
+
+            QPen outline(QColor(0, 0, 0, 200));
+            outline.setWidthF(qMax(2.0, r.height() * 0.035));
+            painter->setPen(outline);
+            painter->setBrush(Qt::NoBrush);
+            painter->drawPath(path);
+
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(Qt::white);
+            painter->drawPath(path);
+
+            painter->restore();
+        }
         return;
     }
     painter->setBrush(Qt::gray);
@@ -86,9 +126,10 @@ void PlayerFish::updatePosition()
             qreal newX = currentPos.x() + dx;
             qreal newY = currentPos.y() + dy;
             
-            // 边界检查
-            newX = qBound(0.0, newX, 1000.0);
-            newY = qBound(0.0, newY, 700.0);
+            const qreal halfW = boundingRect().width() / 2.0;
+            const qreal halfH = boundingRect().height() / 2.0;
+            newX = qBound(halfW, newX, 1000.0 - halfW);
+            newY = qBound(halfH, newY, 700.0 - halfH);
             
             setPos(newX, newY);
             
@@ -112,9 +153,10 @@ void PlayerFish::updatePosition()
             qreal newX = x() + dx;
             qreal newY = y() + dy;
             
-            // 边界检查 (1000x700 场景)
-            newX = qBound(0.0, newX, 1000.0);
-            newY = qBound(0.0, newY, 700.0);
+            const qreal halfW = boundingRect().width() / 2.0;
+            const qreal halfH = boundingRect().height() / 2.0;
+            newX = qBound(halfW, newX, 1000.0 - halfW);
+            newY = qBound(halfH, newY, 700.0 - halfH);
             
             setPos(newX, newY);
             setRotation(qRadiansToDegrees(qAtan2(dy, dx)));

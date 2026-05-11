@@ -1,6 +1,9 @@
 #include "gamescene.h"
 #include "gameconfig.h"
 #include "skinmanager.h"
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QGraphicsSceneMouseEvent>
 #include <QKeyEvent>
 #include <QRandomGenerator>
@@ -11,6 +14,49 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QGraphicsProxyWidget>
+#include <QStringList>
+#include <QUrl>
+
+static QStringList audioSearchDirs()
+{
+    QStringList dirs;
+    dirs << QDir::currentPath();
+    dirs << QCoreApplication::applicationDirPath();
+    dirs << QDir(QCoreApplication::applicationDirPath()).filePath("assets");
+
+    QDir d(QCoreApplication::applicationDirPath());
+    for (int i = 0; i < 3; ++i) {
+        if (!d.cdUp()) break;
+        dirs << d.absolutePath();
+        dirs << d.filePath("assets");
+    }
+
+    dirs.removeAll(QString());
+    dirs.removeDuplicates();
+    return dirs;
+}
+
+static QString findBgmFilePath()
+{
+    const QStringList names{
+        "bgm",
+        "bgm.mp3",
+        "bgm.wav",
+        "bgm.ogg",
+        "bgm.m4a",
+        "bgm.aac",
+        "bgm.flac"
+    };
+    const QStringList dirs = audioSearchDirs();
+    for (const QString& dirPath : dirs) {
+        QDir dir(dirPath);
+        for (const QString& name : names) {
+            const QString path = dir.filePath(name);
+            if (QFileInfo::exists(path)) return path;
+        }
+    }
+    return QString();
+}
 
 GameScene::GameScene(QObject *parent)
     : QGraphicsScene(parent)
@@ -40,12 +86,30 @@ GameScene::GameScene(QObject *parent)
     m_gameOverPanel = nullptr;
     m_pausePanel = nullptr;
     m_victoryPanel = nullptr;
+
+    m_bgmPlayer = new QMediaPlayer(this);
+#if QT_VERSION_MAJOR >= 6
+    m_bgmOutput = new QAudioOutput(this);
+    m_bgmPlayer->setAudioOutput(m_bgmOutput);
+#endif
+
+    connect(&GameConfig::instance(), &GameConfig::volumeChanged, this, [this](int){
+        syncBgmVolume();
+    });
+    connect(m_bgmPlayer, &QMediaPlayer::mediaStatusChanged, this, [this](QMediaPlayer::MediaStatus status){
+        if (status == QMediaPlayer::EndOfMedia) {
+            m_bgmPlayer->setPosition(0);
+            m_bgmPlayer->play();
+        }
+    });
+    syncBgmVolume();
 }
 
 void GameScene::startGame(const GameSession& session)
 {
     m_session = session;
     SkinManager::instance().warmUpTheme(m_session.activeThemeId, m_session.winLevel);
+    startBgm();
 
     if (m_gameOverPanel) {
         removeItem(m_gameOverPanel);
@@ -86,6 +150,35 @@ void GameScene::stopGame()
 {
     m_gameTimer->stop();
     m_spawnTimer->stop();
+}
+
+void GameScene::startBgm()
+{
+    const QString path = findBgmFilePath();
+    if (path.isEmpty()) return;
+
+#if QT_VERSION_MAJOR >= 6
+    m_bgmPlayer->setSource(QUrl::fromLocalFile(path));
+#else
+    m_bgmPlayer->setMedia(QUrl::fromLocalFile(path));
+#endif
+    m_bgmPlayer->setPosition(0);
+    m_bgmPlayer->play();
+}
+
+void GameScene::stopBgm()
+{
+    m_bgmPlayer->stop();
+}
+
+void GameScene::syncBgmVolume()
+{
+    const int vol = GameConfig::instance().volume();
+#if QT_VERSION_MAJOR >= 6
+    if (m_bgmOutput) m_bgmOutput->setVolume(qBound(0.0, vol / 100.0, 1.0));
+#else
+    m_bgmPlayer->setVolume(qBound(0, vol, 100));
+#endif
 }
 
 void GameScene::gameLoop()

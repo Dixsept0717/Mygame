@@ -1,9 +1,50 @@
 #include "skinmanager.h"
 
 #include <QColor>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QFont>
 #include <QImage>
 #include <QPainter>
+#include <QStringList>
+
+static QStringList skinSearchDirs()
+{
+    QStringList dirs;
+    dirs << QDir::currentPath();
+    dirs << QCoreApplication::applicationDirPath();
+    dirs << QDir(QCoreApplication::applicationDirPath()).filePath("assets");
+
+    QDir d(QCoreApplication::applicationDirPath());
+    for (int i = 0; i < 3; ++i) {
+        if (!d.cdUp()) break;
+        dirs << d.absolutePath();
+        dirs << d.filePath("assets");
+    }
+
+    dirs.removeAll(QString());
+    dirs.removeDuplicates();
+    return dirs;
+}
+
+static QString findFirstExistingFile(const QStringList& fileNames)
+{
+    const QStringList dirs = skinSearchDirs();
+    for (const QString& dirPath : dirs) {
+        QDir dir(dirPath);
+        for (const QString& name : fileNames) {
+            const QString path = dir.filePath(name);
+            if (QFileInfo::exists(path)) return path;
+        }
+    }
+    return QString();
+}
+
+static QSize targetSizeForLevel(int level)
+{
+    return QSize(70 + level * 42, 42 + level * 24);
+}
 
 SkinManager& SkinManager::instance()
 {
@@ -26,7 +67,41 @@ QPixmap SkinManager::pixmapFor(ThemeId themeId, FishVisualType type, int level, 
     auto it = m_cache.find(key);
     if (it != m_cache.end()) return it.value();
 
-    QPixmap pix = generatePlaceholder(themeId, type, level, variant);
+    QPixmap pix;
+    QStringList names;
+    if (themeId == ThemeId::Default) {
+        if (type == FishVisualType::Player) {
+            names << "Fish_player.png" << "Fish_player.jpg" << "Fish_player.jpeg";
+        } else {
+            names << QString("Fish_enermy_%1.png").arg(level)
+                  << QString("Fish_enermy_%1.jpg").arg(level)
+                  << QString("Fish_enermy_%1.jpeg").arg(level);
+        }
+    } else if (themeId == ThemeId::McDonalds) {
+        if (type == FishVisualType::Player) {
+            names << "m_player.png" << "m_player.jpg" << "m_player.jpeg";
+        } else {
+            names << QString("m_enermy_%1.png").arg(level)
+                  << QString("m_enermy_%1.jpg").arg(level)
+                  << QString("m_enermy_%1.jpeg").arg(level);
+        }
+    }
+
+    if (!names.isEmpty()) {
+        const QString path = findFirstExistingFile(names);
+        if (!path.isEmpty()) {
+            QPixmap loaded(path);
+            if (!loaded.isNull()) {
+                const QImage mirrored = loaded.toImage().mirrored(true, false);
+                pix = QPixmap::fromImage(mirrored).scaled(targetSizeForLevel(level), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            }
+        }
+    }
+
+    if (pix.isNull()) {
+        pix = generatePlaceholder(themeId, type, level, variant);
+    }
+
     m_cache.insert(key, pix);
     return pix;
 }
@@ -47,8 +122,9 @@ void SkinManager::clearCache()
 
 QPixmap SkinManager::generatePlaceholder(ThemeId themeId, FishVisualType type, int level, int variant) const
 {
-    const int w = 60 + level * 8;
-    const int h = 36 + level * 4;
+    const QSize size = targetSizeForLevel(level);
+    const int w = size.width();
+    const int h = size.height();
     QImage img(w, h, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::transparent);
 
@@ -106,6 +182,5 @@ QPixmap SkinManager::generatePlaceholder(ThemeId themeId, FishVisualType type, i
     p.setPen(QColor(0, 0, 0, 180));
     p.drawText(QRectF(0, 0, bodyRect.width(), bodyRect.height()), Qt::AlignCenter, QString("Lv%1").arg(level));
 
-    return QPixmap::fromImage(img);
+    return QPixmap::fromImage(img.mirrored(true, false));
 }
-
